@@ -25,12 +25,18 @@ void theoraCb(const theora_image_transport::Packet::ConstPtr &frame){
   }
 }
 
+void sensorCb(const sensor.msg &msg){
+  //probably just stick the sensor stuff in a FIFO to wait to be sent out
+}
+
 int main(int argc, char **argv){
   ros::init(argc, argv, "comms");
 
   ros::NodeHandle nh;
 
-  ros::Subscriber sub = nh.subscribe("camera/rgbd/mono/theora", 150, theoraCb);
+  ros::Subscriber subSen = nh.subscribe("sensors", 150, sensorCb);
+  ros::Subscriber subVid = nh.subscribe("camera/rgbd/mono/theora", 150, theoraCb);
+
   ros::Publisher pub = nh.advertise<EZR_Pkt>("serialOut", 512);
 
   ros::spin();
