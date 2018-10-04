@@ -42,7 +42,8 @@ void theoraCb(const theora_image_transport::Packet::ConstPtr &frame){
     dataStream.pop();
     i++;
   }
-
+  pub.publish(pkt);
+  
   /*construct data packets*/
   for (uint8_t pktNo = 2; pktNo <= EZRCount; pktNo++){
     EZR_Pkt pkt;    //generate packet to send over EZR connection
