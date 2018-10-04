@@ -2,4 +2,4 @@
 #include "theora_image_transport/Packet.h"
 #include "std_msgs/String.h"
 #include <vector>
-#include "EZR_Pkt.h"
+#include <hades_comm_handler/EZR_Pkt.h>

@@ -1,1 +1,1 @@
-uint8_t[63] data
+uint8[63] data
