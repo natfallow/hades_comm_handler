@@ -54,23 +54,25 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 
 			EZRCount = pkt.data[1];	//total packets in this frame
 			ROS_INFO("EZRCount: %d",EZRCount);
-
+			
 			byteModulo = pkt.data[2];//data bytes in last packet of frame
-
+			ROS_INFO("size: %d",((EZRCount-1)*62+byteModulo));
+			
 			bytePos = 3;
+
 			while(bytePos<=6){ //next 4 bytes are theora.packetno field (int64 casts to uint8[4])
 				packnum[bytePos-3] = pkt.data[bytePos];
 				bytePos++;
 			}
 			frame.packetno = Uint8ArrtoUint64_pnum(packnum, 0);
-			ROS_INFO("packetno: %d",frame.packetno);
+			ROS_INFO("packetno");
 
 			while(bytePos<=14){	//next 8 bytes are theora.granulepos field (int64 cast to uint8[8])
 				granpos[bytePos-7] = pkt.data[bytePos];
 				bytePos++;
 			}
 			frame.granulepos = Uint8ArrtoUint64(granpos, 0); 
-			ROS_INFO("granulepos: %d",frame.granulepos);
+			ROS_INFO("granulepos");
 
 			while(bytePos<63){ //populate remainder from data field
 				dataField.push(pkt.data[bytePos]);
@@ -78,15 +80,16 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 					break;
 				bytePos++;
 			}
-		}
 		ROS_INFO("First packet handled");
+		}
+		
 	/******************************/
 
 	/*Handle subsequent packets*/
 		if (pkt.data[0] <= EZRCount){ //iterate through all data packets
 			ROS_INFO("handling packet %d",pkt.data[0]);
 
-			for(bytePos = 1; b < 63; b++){ //populate remainder from data field
+			for(bytePos = 1; bytePos < 63; bytePos++){ //populate remainder from data field
 				if(pkt.data[0]==EZRCount && bytePos == byteModulo)
 					break;
 				dataField.push(pkt.data[bytePos]);
@@ -97,13 +100,13 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 	/* Prepare and send frame */
 		if(pkt.data[0] == EZRCount){
 			ROS_INFO("last packet of frame");
+			bytePos = 0;
 			while(!dataField.empty()){
-				frame.data[bytePos] = dataField.front();
+				frame.data.push_back(dataField.front());
 				ROS_INFO("%d data read",bytePos);
 				dataField.pop();
 				bytePos++;
 			}
-			ROS_INFO("set data");
 			pub.publish(frame);
 		}
 	/**************************/
