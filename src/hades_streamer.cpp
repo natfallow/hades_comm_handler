@@ -52,27 +52,25 @@ void theoraCb(const theora_image_transport::Packet &frame){
 	/*Construct first packet*/
 		pkt.data[0] = 1;        //message type 1 for video
 		pkt.data[1] = EZRCount; //number of EZR packets needed to send this message
+		pkt.data[2] = byteModulo//number of data bytes in last packet
 
-		bytePos = 2;
-		while(bytePos<=5){ //next 4 bytes are theora.packetno field (int64 casts to uint8[4])
+		bytePos = 3;
+		while(bytePos<=6){ //next 4 bytes are theora.packetno field (int64 casts to uint8[4])
 			pkt.data[bytePos] = packnum[bytePos-2];
 			bytePos++;
 		}
-		while(bytePos<=13){	//next 8 bytes are theora.granulepos field (int64 cast to uint8[8])
+
+		while(bytePos<=14){	//next 8 bytes are theora.granulepos field (int64 cast to uint8[8])
 			pkt.data[bytePos] = granpos[bytePos-6];
 			bytePos++;
-		}
+		}			
 
-		if(EZRCount == 1){ //if single packet frame, next byte is byte modulo
-			pkt.data[bytePos] = byteModulo;
-			bytePos++;
-		}
-		
 		while(bytePos<63 && !dataStream.empty()){ //populate remainder from data field
 			pkt.data[bytePos] = dataStream.front();
 			dataStream.pop();
 			bytePos++;
 		}
+		
 		pub.publish(pkt); //publish first packet
 		ROS_INFO("packet 1");
 	/************************/
@@ -83,16 +81,12 @@ void theoraCb(const theora_image_transport::Packet &frame){
 
 			pkt.data[bytePos] = pktNo;	//first byte is packet position in msg
 			
-			if(pktNo == EZRCount){		//second byte of last packet is modulo
-				pkt.data[bytePos] = byteModulo; 
-				bytePos++;
-			}
-
 			while(bytePos<63 && !dataStream.empty()){ //populate remainder from data field
 				pkt.data[bytePos] = dataStream.front();
 				dataStream.pop();
 				bytePos++;
 			}
+
 			pub.publish(pkt); //publish data packet
 			ROS_DEBUG("packet %d",pktNo);
 		} 
