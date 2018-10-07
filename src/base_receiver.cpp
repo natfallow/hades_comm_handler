@@ -14,11 +14,13 @@
 /* Global Declarations */
 /***********************/
 
+
+uint32_t dataSize;
 uint8_t bytePos, EZRCount, byteModulo, granpos[8], packnum[4];
 
-std::queue<uint8_t> dataField;  //data field FIFO
+std::queue<uint8_t> dataField;  	//data field FIFO
 
-theora_image_transport::Packet frame; //reconstituted theora frame 
+theora_image_transport::Packet frame; 	//reconstituted theora frame 
 
 ros::Publisher pub;
 
@@ -28,13 +30,6 @@ uint64_t Uint8ArrtoUint64 (uint8_t* var, uint32_t lowest_pos){
             (((uint64_t)var[lowest_pos+5]) << 40) | 
             (((uint64_t)var[lowest_pos+4]) << 32) |
             (((uint64_t)var[lowest_pos+3]) << 24) | 
-            (((uint64_t)var[lowest_pos+2]) << 16) |
-            (((uint64_t)var[lowest_pos+1]) << 8)  | 
-            (((uint64_t)var[lowest_pos])   << 0);
-}
-
-uint64_t Uint8ArrtoUint64_pnum (uint8_t* var, uint32_t lowest_pos){
-    return  (((uint64_t)var[lowest_pos+3]) << 24) | 
             (((uint64_t)var[lowest_pos+2]) << 16) |
             (((uint64_t)var[lowest_pos+1]) << 8)  | 
             (((uint64_t)var[lowest_pos])   << 0);
@@ -56,19 +51,21 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 			ROS_INFO("EZRCount: %d",EZRCount);
 			
 			byteModulo = pkt.data[2];//data bytes in last packet of frame
-			ROS_INFO("size: %d",((EZRCount-1)*62+byteModulo));
+			
+			dataSize = (EZRCount-1)*62+byteModulo-19; // how many elements should be in the data field
+			ROS_INFO("size: %d",dataSize + 19);
 			
 			bytePos = 3;
 
-			while(bytePos<=6){ //next 4 bytes are theora.packetno field (int64 casts to uint8[4])
+			while(bytePos<=10){ //next 8 bytes are theora.packetno field (int64 casts to uint8[4])
 				packnum[bytePos-3] = pkt.data[bytePos];
 				bytePos++;
 			}
-			frame.packetno = Uint8ArrtoUint64_pnum(packnum, 0);
+			frame.packetno = Uint8ArrtoUint64(packnum, 0);
 			ROS_INFO("packetno");
 
-			while(bytePos<=14){	//next 8 bytes are theora.granulepos field (int64 cast to uint8[8])
-				granpos[bytePos-7] = pkt.data[bytePos];
+			while(bytePos<=18){	//next 8 bytes are theora.granulepos field (int64 cast to uint8[8])
+				granpos[bytePos-11] = pkt.data[bytePos];
 				bytePos++;
 			}
 			frame.granulepos = Uint8ArrtoUint64(granpos, 0); 
@@ -101,12 +98,14 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 		if(pkt.data[0] == EZRCount){
 			ROS_INFO("last packet of frame");
 			bytePos = 0;
-			while(!dataField.empty()){
+			for(dataSize; dataSize && !dataField.empty(); dataSize--){
 				frame.data.push_back(dataField.front());
-				ROS_INFO("%d data read",bytePos);
 				dataField.pop();
-				bytePos++;
 			}
+
+			frame.header.stamp = ros::Time::now();
+			frame.header.frame_id = "camera_rgb_optical_frame";
+
 			pub.publish(frame);
 		}
 	/**************************/

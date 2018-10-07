@@ -20,49 +20,71 @@ int totalSize;
 uint8_t bytePos, EZRCount, byteModulo, granpos[8], packnum[8];
 
 std::queue<uint8_t> dataStream;  //data field FIFO
+std::queue<hades_comm_handler::EZR_Pkt> pktQueue; //packet FIFO
 
-hades_comm_handler::EZR_Pkt pkt; //ROS msg sent to teensy
+hades_comm_handler::EZR_Pkt pkt; //ROS msg to be sent to teensy
 
 ros::Publisher pub;
 
 /************************/
 /* Theora Packetisation */
 /************************/
+
+void Uint64toUint8Arr (uint8_t* buf, uint64_t var, uint32_t lowest_pos){
+	buf[lowest_pos]     =   (var & 0x00000000000000FF) >> 0 ;
+	buf[lowest_pos+1]   =   (var & 0x000000000000FF00) >> 8 ;
+	buf[lowest_pos+2]   =   (var & 0x0000000000FF0000) >> 16 ;
+	buf[lowest_pos+3]   =   (var & 0x00000000FF000000) >> 24 ;
+	buf[lowest_pos+4]   =   (var & 0x000000FF00000000) >> 32 ;
+	buf[lowest_pos+5]   =   (var & 0x0000FF0000000000) >> 40 ;
+	buf[lowest_pos+6]   =   (var & 0x00FF000000000000) >> 48 ;
+	buf[lowest_pos+7]   =   (var & 0xFF00000000000000) >> 56 ;
+}
+
+/*Ensure packets come out evenly spaced*/
+void timerCb(const ros::TimerEvent&){
+	if(!pktQueue.empty()){
+		pub.publish(pktQueue.front());
+		pktQueue.pop();
+		ROS_INFO("packet sent");
+	}
+}
+
 void theoraCb(const theora_image_transport::Packet &frame){
 	ROS_DEBUG("frame received");
 
 	/*Prepare packet parameters*/
-		totalSize = frame.data.size() + 15;                //variable data field + 8B granulepos + 4B theoraFrameCount + 1B EZRCount + 1B byteModulo + 1B MsgType
+		totalSize = frame.data.size() + 19;                //variable data field + 8B granulepos + 8B theoraFrameCount + 1B EZRCount + 1B byteModulo + 1B MsgType
 		ROS_INFO("totalSize: %d",totalSize);
 		EZRCount = totalSize / 62 + (totalSize % 62 != 0); //number of EZR packets needed to send this message
 		byteModulo = totalSize % 62;                       //number of data bytes in last packet
 	/***************************/
 
 	/*Read data field into FIFO*/
-		for(int i = 0;i<=frame.data.size();i++)
+		for(int i = 0;i < frame.data.size();i++)
 			dataStream.push(frame.data[i]);
 		ROS_DEBUG("datastream populated");
 	/***************************/
 
 	/*Convert int64 to byte arrays*/
-		std::memcpy(granpos, &frame.granulepos, 8);    //assuming little endianness
-		std::memcpy(packnum, &frame.packetno, 8);      //assuming little endianness
+		Uint64toUint8Arr(granpos, frame.granulepos, 0);    //assuming little endianness
+		Uint64toUint8Arr(packnum, frame.packetno, 0);      //assuming little endianness
 		ROS_DEBUG("gpos & pnum instantiated");
 	/******************************/
 
 	/*Construct first packet*/
-		pkt.data[0] = 1;        //message type 1 for video
-		pkt.data[1] = EZRCount; //number of EZR packets needed to send this message
+		pkt.data[0] = 1;         //message type 1 for video
+		pkt.data[1] = EZRCount;  //number of EZR packets needed to send this message
 		pkt.data[2] = byteModulo;//number of data bytes in last packet
 
 		bytePos = 3;
-		while(bytePos<=6){ //next 4 bytes are theora.packetno field (int64 casts to uint8[4])
-			pkt.data[bytePos] = packnum[bytePos-2];
+		while(bytePos<=10){ //next 4 bytes are theora.packetno field (int64 casts to uint8[4])
+			pkt.data[bytePos] = packnum[bytePos-3];
 			bytePos++;
 		}
 
-		while(bytePos<=14){	//next 8 bytes are theora.granulepos field (int64 cast to uint8[8])
-			pkt.data[bytePos] = granpos[bytePos-6];
+		while(bytePos<=18){	//next 8 bytes are theora.granulepos field (int64 cast to uint8[8])
+			pkt.data[bytePos] = granpos[bytePos-11];
 			bytePos++;
 		}			
 
@@ -71,8 +93,12 @@ void theoraCb(const theora_image_transport::Packet &frame){
 			dataStream.pop();
 			bytePos++;
 		}
+		while(bytePos<63){ //populate remainder with zeroes
+			pkt.data[bytePos] = 0;
+			bytePos++;
+		}
 		
-		pub.publish(pkt); //publish first packet
+		pktQueue.push(pkt); //publish first packet
 		ROS_DEBUG("packet 1");
 	/************************/
 
@@ -86,8 +112,12 @@ void theoraCb(const theora_image_transport::Packet &frame){
 				dataStream.pop();
 				bytePos++;
 			}
+			while(bytePos<63){ //populate remainder with zeroes
+				pkt.data[bytePos] = 0;
+				bytePos++;
+			}
 
-			pub.publish(pkt); //publish data packet
+			pktQueue.push(pkt); //publish data packet
 			ROS_DEBUG("packet %d",pktNo);
 		} 
 	/************************/
@@ -100,7 +130,9 @@ int main(int argc, char **argv){
 
 	ros::NodeHandle nh;
 
-	ros::Subscriber subVid = nh.subscribe("camera/rgb/image_mono/theora", 150, theoraCb);
+	ros::Subscriber subVid = nh.subscribe("camera/rgb/image_mono/theora_throttle", 150, theoraCb);
+
+	ros::Timer pktTimer = nh.createTimer(ros::Duration(0.0005), timerCb);
 
 	pub = nh.advertise<hades_comm_handler::EZR_Pkt>("serialOut", 512);
 	
