@@ -41,15 +41,6 @@ void Uint64toUint8Arr (uint8_t* buf, uint64_t var, uint32_t lowest_pos){
 	buf[lowest_pos+7]   =   (var & 0xFF00000000000000) >> 56 ;
 }
 
-/*Ensure packets come out evenly spaced*/
-void timerCb(const ros::TimerEvent&){
-	if(!pktQueue.empty()){
-		pub.publish(pktQueue.front());
-		pktQueue.pop();
-		ROS_INFO("packet sent");
-	}
-}
-
 void theoraCb(const theora_image_transport::Packet &frame){
 	ROS_DEBUG("frame received");
 
@@ -123,19 +114,30 @@ void theoraCb(const theora_image_transport::Packet &frame){
 	/************************/
 }
 
+/*Ensure packets come out evenly spaced*/
+void timerCb(const ros::TimerEvent&){
+	if(!pktQueue.empty()){
+		pub.publish(pktQueue.front());
+		pktQueue.pop();
+		ROS_INFO("packet sent");
+	}
+}
 
 int main(int argc, char **argv){
-
+	//initialise ROS node
 	ros::init(argc, argv, "comms");	
-
+	
+	//declare node handler
 	ros::NodeHandle nh;
 
-	ros::Subscriber subVid = nh.subscribe("camera/rgb/image_mono/theora_throttle", 150, theoraCb);
-
-	ros::Timer pktTimer = nh.createTimer(ros::Duration(0.0005), timerCb);
+	//declare subscriber to theora video & publisher to serialOut
+	ros::Subscriber subVid = nh.subscribe("camera/rgb/image_mono/theora", 150, theoraCb);
 
 	pub = nh.advertise<hades_comm_handler::EZR_Pkt>("serialOut", 512);
-	
+
+	//declare timer to ensure packets spaced out
+	ros::Timer pktTimer = nh.createTimer(ros::Duration(0.0006), timerCb);
+
 	ROS_DEBUG("initialised");
 
 	ros::spin();

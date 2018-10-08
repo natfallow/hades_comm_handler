@@ -15,7 +15,7 @@
 /***********************/
 
 
-uint32_t dataSize;
+uint32_t dataSize, bos = 1;
 uint8_t bytePos, EZRCount, byteModulo, granpos[8], packnum[4];
 
 std::queue<uint8_t> dataField;  	//data field FIFO
@@ -83,9 +83,9 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 	/******************************/
 
 	/*Handle subsequent packets*/
-		if (pkt.data[0] <= EZRCount){ //iterate through all data packets
+		if (pkt.data[0] <= EZRCount && pkt.data[0] != 1){ //iterate through all data packets
 			ROS_INFO("handling packet %d",pkt.data[0]);
-
+			
 			for(bytePos = 1; bytePos < 63; bytePos++){ //populate remainder from data field
 				if(pkt.data[0]==EZRCount && bytePos == byteModulo)
 					break;
@@ -97,30 +97,40 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 	/* Prepare and send frame */
 		if(pkt.data[0] == EZRCount){
 			ROS_INFO("last packet of frame");
-			bytePos = 0;
-			for(dataSize; dataSize && !dataField.empty(); dataSize--){
+			frame.data.clear();
+			while(!dataField.empty()){
 				frame.data.push_back(dataField.front());
 				dataField.pop();
 			}
-
+			
+			frame.header.seq = (uint32_t)frame.packetno;
 			frame.header.stamp = ros::Time::now();
 			frame.header.frame_id = "camera_rgb_optical_frame";
+			frame.b_o_s = bos;
 
 			pub.publish(frame);
+			bos = 0;
 		}
 	/**************************/
 }
 
+/*************/
+/* Dummy Cbs */
+/*************/
+
+void connected(const ros::SingleSubscriberPublisher&){}
+void disconnected(const ros::SingleSubscriberPublisher&){}
 
 int main(int argc, char **argv){
 	ros::init(argc, argv, "commsOut");	
 
 	ros::NodeHandle re;
+	ros::AdvertiseOptions op = ros::AdvertiseOptions::create<theora_image_transport::Packet>("videoFeed/theora/", 150, &connected, &disconnected, ros::VoidPtr(), NULL);
+	op.has_header = false;
+	pub = re.advertise(op);
 
-	ros::Subscriber subVid = re.subscribe("serialOut", 10000, serialCb);
+	ros::Subscriber subVid = re.subscribe("serialOut", 10000, serialCb);	
 
-	pub = re.advertise<theora_image_transport::Packet>("videoFeed", 150);
-	
 	ROS_DEBUG("initialised");
 
 	ros::spin();
