@@ -1,5 +1,5 @@
 /************************/
-/* HADES VIDEO STREAMER */
+/* HADES VIDEO RECEIVER */
 /************************/
 /* todo:
  * - 
@@ -14,9 +14,8 @@
 /* Global Declarations */
 /***********************/
 
-
 uint32_t dataSize, bos = 1;
-uint8_t bytePos, EZRCount, byteModulo, granpos[8], packnum[4];
+uint8_t bytePos, EZRCount, byteModulo, pktCount, granpos[8], packnum[8];
 
 std::queue<uint8_t> dataField;  	//data field FIFO
 
@@ -24,6 +23,7 @@ theora_image_transport::Packet frame; 	//reconstituted theora frame
 
 ros::Publisher pub;
 
+/*convert uint8[8] from packet to uint64 theora fields*/
 uint64_t Uint8ArrtoUint64 (uint8_t* var, uint32_t lowest_pos){
     return  (((uint64_t)var[lowest_pos+7]) << 56) | 
             (((uint64_t)var[lowest_pos+6]) << 48) |
@@ -46,6 +46,8 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 		if (pkt.data[0]==1){ //check if new frame
 			ROS_INFO("New Frame");
 			while(!dataField.empty()){dataField.pop();}	//ensure data queue is empty 
+			
+			pktCount = 1;	//first pkt of Frame
 
 			EZRCount = pkt.data[1];	//total packets in this frame
 			ROS_INFO("EZRCount: %d",EZRCount);
@@ -83,7 +85,7 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 	/******************************/
 
 	/*Handle subsequent packets*/
-		if (pkt.data[0] <= EZRCount && pkt.data[0] != 1){ //iterate through all data packets
+		if (pktCount <= EZRCount && pkt.data[0] != 1){ //iterate through all data packets
 			ROS_INFO("handling packet %d",pkt.data[0]);
 			
 			for(bytePos = 1; bytePos < 63; bytePos++){ //populate remainder from data field
@@ -95,14 +97,16 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 	/***************************/
 
 	/* Prepare and send frame */
-		if(pkt.data[0] == EZRCount){
+		if(pktCount == EZRCount || pkt.data[0] >= EZRCount){
 			ROS_INFO("last packet of frame");
-			frame.data.clear();
-			while(!dataField.empty()){
+			
+			frame.data.clear();		//ensure no junk data left in frame vector
+			while(!dataField.empty()){	//populate frame.data with info
 				frame.data.push_back(dataField.front());
 				dataField.pop();
 			}
 			
+			/* ROS Header setup */
 			frame.header.seq = (uint32_t)frame.packetno;
 			frame.header.stamp = ros::Time::now();
 			frame.header.frame_id = "camera_rgb_optical_frame";
@@ -112,26 +116,25 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 			bos = 0;
 		}
 	/**************************/
+
+	pktCount++; //iterate so not reliant on pkt.data[0]
 }
 
-/*************/
-/* Dummy Cbs */
-/*************/
-
-void connected(const ros::SingleSubscriberPublisher&){}
-void disconnected(const ros::SingleSubscriberPublisher&){}
+/* Dummy Cbs to make header work */
+	void connected(const ros::SingleSubscriberPublisher&){}
+	void disconnected(const ros::SingleSubscriberPublisher&){}
+/*********************************/
 
 /* Main */
-
 int main(int argc, char **argv){
 	ros::init(argc, argv, "commsOut");	
 
 	ros::NodeHandle re;
 	ros::AdvertiseOptions op = ros::AdvertiseOptions::create<theora_image_transport::Packet>("videoFeed/theora/", 150, &connected, &disconnected, ros::VoidPtr(), NULL);
-	op.has_header = false;
+	op.has_header = false;	//stops pub.publish() from overwriting header.seq
 	pub = re.advertise(op);
 
-	ros::Subscriber subVid = re.subscribe("serialTest", 10000, serialCb);	
+	ros::Subscriber subVid = re.subscribe("serialOut", 10000, serialCb);	
 
 	ROS_DEBUG("initialised");
 
