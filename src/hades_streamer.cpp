@@ -131,7 +131,7 @@ int main(int argc, char **argv){
 	ros::NodeHandle nh;
 
 	//declare subscriber to theora video & publisher to serialOut
-	ros::Subscriber subVid = nh.subscribe("camera/rgb/image_mono/theora", 150, theoraCb);
+	ros::Subscriber subVid = nh.subscribe("camera/rgb/image_mono/theora_throttle", 150, theoraCb);
 
 	pub = nh.advertise<hades_comm_handler::EZR_Pkt>("serialOut", 512);
 

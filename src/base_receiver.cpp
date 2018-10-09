@@ -121,6 +121,8 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 void connected(const ros::SingleSubscriberPublisher&){}
 void disconnected(const ros::SingleSubscriberPublisher&){}
 
+/* Main */
+
 int main(int argc, char **argv){
 	ros::init(argc, argv, "commsOut");	
 
@@ -129,7 +131,7 @@ int main(int argc, char **argv){
 	op.has_header = false;
 	pub = re.advertise(op);
 
-	ros::Subscriber subVid = re.subscribe("serialOut", 10000, serialCb);	
+	ros::Subscriber subVid = re.subscribe("serialTest", 10000, serialCb);	
 
 	ROS_DEBUG("initialised");
 
