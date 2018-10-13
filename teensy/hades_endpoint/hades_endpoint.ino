@@ -1,3 +1,5 @@
+#include <EEPROM.h>
+
 /*TODO:
   Currently only for theora packets; need to generalise for video / sensor / control packet types*/
 
@@ -10,17 +12,20 @@
 #define interruptIn     25
 
 #include <ros.h>
-#include <cppQueue.h>
-#include <SPI.h>
 #include <std_msgs/String.h>
 #include </home/hades/sketchbook/libraries/ros_lib/hades_comm_handler/EZR_Pkt.h>
 
+#include <cppQueue.h>
+#include <SPI.h>
+#include <TimerOne.h>
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
 
 /*ROS serial setup*/
 uint8_t rcvdFromRos[63]; //received packet to be put in buffer
 
 Queue txBuf(63, 512, FIFO); //transmit buffer (63 byte records, 512 records total, FIFO mode)
-Queue rxBuf(1, 1024, FIFO); //receive buffer (1 byte records, 1024 records total, FIFO mode)
 
 ros::NodeHandle  nh;        //Declare ROS node handler
 
@@ -33,7 +38,11 @@ bool recieveFlag = false;
 SPISettings settings(2450000, MSBFIRST, SPI_MODE1);
 
 
-uint8_t rByte;
+int packetCount = 0;
+
+int byteError = 0;
+
+uint8_t rByte[63];
 /***********/
 
 /*When packet received from serial*/
@@ -52,51 +61,59 @@ ros::Publisher rcvd("serialTest", &rcvd_pkt);
 
 
 
-/*when packet received from radio*/
+/*when byte received from radio*/
 void SPIRecieve() {
   SPI.beginTransaction(settings);
 
   digitalWrite(slaveSelectPin, LOW);
 
-  rByte = SPI.transfer(0);                //Intialising every SPI could be slowing system
-
-  //rxBuf.push(SPI.transfer(0));                   //TEST
-
+  rByte[SPICounter] = SPI.transfer(0);                //Intialising every SPI could be slowing system
+  //SPICounter--;
+  //rByte[SPICounter] = SPI.transfer(0);                //Intialising every SPI could be slowing system
+  
   digitalWrite(slaveSelectPin, HIGH);
 
   SPI.endTransaction();
-  
-  rxBuf.push(&rByte);
-  Serial.println(rByte);
+
   SPICounter++;
 }
 
 /*packet sent to radio*/
 void SPISend() {
-  //digitalWrite(debugPin, HIGH - digitalRead(debugPin)); //flash LED when packet received
-  
   uint8_t txPacket[63];
   txBuf.pop(&txPacket);
-  
+
   SPI.beginTransaction(settings);
-  digitalWrite(slaveSelectPin, LOW); //This is making the interrupt not work...
   
 
   for (int i = 0; i <= 62; i++) {
-    SPI.transfer(txPacket[i]);
-        
-    //digitalWrite(debugPin, HIGH - digitalRead(debugPin)); //flash LED when packet received
+    digitalWrite(slaveSelectPin, LOW);
+
     delayMicroseconds(9);
+    
+    SPI.transfer(txPacket[i]);
+
+    delayMicroseconds(9);
+
+    digitalWrite(slaveSelectPin, HIGH);
   }
-  digitalWrite(slaveSelectPin, HIGH);
+  
   SPI.endTransaction();
 }
 
+//void timeOut(){
+//SPICounter = 0;
+//}
+
 void setup()
 {
+  //Timer1.initialize(1000000);
+
   SPI.begin();
 
   SPICounter = 0;
+
+  Serial.begin(2000000);
 
   pinMode(slaveSelectPin, OUTPUT);
   digitalWrite(slaveSelectPin, HIGH);
@@ -105,32 +122,58 @@ void setup()
   digitalWrite(interruptOut, LOW);
 
   pinMode(interruptIn, INPUT);
-  attachInterrupt(interruptIn, SPIRecieve, RISING);
 
-  //pinMode(debugPin, INPUT);
+  attachInterrupt(digitalPinToInterrupt(interruptIn), SPIRecieve, RISING);
+
+  //Timer1.attachInterrupt(timeOut);
+
 
   nh.getHardware()->setBaud(2000000);
-  
+
   nh.initNode();
   nh.subscribe(sub);
   nh.advertise(rcvd);
+
+  //Timer1.start();
+
 }
 
 void loop()
 {
   if (!txBuf.isEmpty()) {
     SPISend();
-    delayMicroseconds(6000);
+    //delayMicroseconds(1900);
+    delayMicroseconds(300);
   }
-  
+
   if (SPICounter == 63) {
-    for (int i = 0; i < 63; i++) {
-      rxBuf.pop(&rcvd_pkt.data[i]);      
-    }
-    rcvd.publish(&rcvd_pkt);
+    int sum = 0;
+    packetCount++;
+   // memcpy(rcvd_pkt.data, rByte, 63);
+     for(int i = 0; i <63; i++){
+      //Serial.println(rByte[i]);
+      //sum += rByte[i];
+        if(rByte[i] != i){
+          byteError += 1;
+          //Serial.println(byteError);
+        }
+      }
+      //if(sum != 1953){
+       // byteError += 1;
+        //Serial.println(byteError);
+      //}
+      
+      Serial.println(packetCount);
+      //Serial.println(byteError);
+      if(packetCount == 20000){
+        Serial.println(byteError);
+      }
+   // rcvd.publish(&rcvd_pkt);
+    //Timer1.restart();
+    
     SPICounter = 0;
   }
-  nh.spinOnce();
+  //nh.spinOnce();
 }
 
-
+//
