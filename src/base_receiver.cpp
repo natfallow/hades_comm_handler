@@ -15,6 +15,7 @@
 /***********************/
 
 uint32_t dataSize, bos = 1;
+uint16_t totalBytes;
 uint8_t bytePos, EZRCount, byteModulo, pktCount, granpos[8], packnum[8];
 
 std::queue<uint8_t> dataField;  	//data field FIFO
@@ -48,11 +49,14 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 			while(!dataField.empty()){dataField.pop();}	//ensure data queue is empty 
 			
 			pktCount = 1;	//first pkt of Frame
-
-			EZRCount = pkt.data[1];	//total packets in this frame
-			ROS_INFO("EZRCount: %d",EZRCount);
 			
-			byteModulo = pkt.data[2];//data bytes in last packet of frame
+			totalBytes = pkt.data[1] | ((uint16_t)pkt.data[2] << 8);
+			//EZRCount = pkt.data[1];	//total packets in this frame
+			ROS_INFO("totalBytes: %d",totalBytes);
+			
+
+			EZRCount = totalBytes / 62 + (totalBytes % 62 != 0); //number of EZR packets needed to send this message
+			byteModulo = totalBytes % 62;                       //number of data bytes in last packet
 			
 			dataSize = (EZRCount-1)*62+byteModulo-19; // how many elements should be in the data field
 			ROS_INFO("size: %d",dataSize + 19);
@@ -74,9 +78,9 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 			ROS_INFO("granulepos");
 
 			while(bytePos<63){ //populate remainder from data field
-				dataField.push(pkt.data[bytePos]);
 				if(EZRCount == 1 && bytePos == byteModulo)
 					break;
+				dataField.push(pkt.data[bytePos]);
 				bytePos++;
 			}
 		ROS_INFO("First packet handled");
@@ -107,7 +111,7 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 			}
 			
 			/* ROS Header setup */
-			frame.header.seq = (uint32_t)frame.packetno;
+			//frame.header.seq = (uint32_t)frame.packetno;
 			frame.header.stamp = ros::Time::now();
 			frame.header.frame_id = "camera_rgb_optical_frame";
 			frame.b_o_s = bos;
@@ -121,8 +125,8 @@ void serialCb(const hades_comm_handler::EZR_Pkt &pkt){
 }
 
 /* Dummy Cbs to make header work */
-	void connected(const ros::SingleSubscriberPublisher&){}
-	void disconnected(const ros::SingleSubscriberPublisher&){}
+	//void connected(const ros::SingleSubscriberPublisher&){}
+	//void disconnected(const ros::SingleSubscriberPublisher&){}
 /*********************************/
 
 /* Main */
@@ -130,9 +134,9 @@ int main(int argc, char **argv){
 	ros::init(argc, argv, "commsOut");	
 
 	ros::NodeHandle re;
-	ros::AdvertiseOptions op = ros::AdvertiseOptions::create<theora_image_transport::Packet>("videoFeed/theora/", 150, &connected, &disconnected, ros::VoidPtr(), NULL);
-	op.has_header = false;	//stops pub.publish() from overwriting header.seq
-	pub = re.advertise(op);
+	//ros::AdvertiseOptions op = ros::AdvertiseOptions::create<theora_image_transport::Packet>("videoFeed/theora/", 150);
+	//op.has_header = false;	//stops pub.publish() from overwriting header.seq
+	pub = re.advertise<theora_image_transport::Packet>("videoFeed/theora/", 150);
 
 	ros::Subscriber subVid = re.subscribe("serialOut", 10000, serialCb);	
 

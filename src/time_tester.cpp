@@ -11,17 +11,17 @@
 #include "theora_image_transport/Packet.h"
 #include <queue>
 #include <stdio.h>
+#include <fstream>
 
 /***********************/
 /* Global Declarations */
 /***********************/
 
 std::queue<theora_image_transport::Packet> cameraFrames;
-std::vector<double> diffs;
-ofstream output;
+std::ofstream output;
 
 theora_image_transport::Packet camFrame;
-double diff;
+ros::Duration diff;
 int size, count;
 
 /* Handles camera/rgb/image_mono/theora topic */
@@ -35,13 +35,18 @@ void videoFeedCb(const theora_image_transport::Packet &vidFrame){
 		ROS_INFO("20000 packets counted");
 		output.close();
 		ros::shutdown();
+		return;
 	}
-    camFrame = cameraFrames.front();
+    	camFrame = cameraFrames.front();
 	cameraFrames.pop();
 	if(camFrame.packetno == vidFrame.packetno){	//confirm frames in sync
 		diff = vidFrame.header.stamp - camFrame.header.stamp;
 		size = vidFrame.data.size() + 19;
-		output << diff << ", " << size << "\n";
+		output << count << ", " << diff.toSec() << ", " << size << "\n";
+		ROS_INFO("%d, %f, %d",count,diff.toSec(), size);
+	}
+	else{
+		ROS_INFO("RIP");
 	}
 	count++;
 }
@@ -59,5 +64,6 @@ int main(int argc, char **argv){
 	ROS_DEBUG("initialised");
 
 	ros::spin();
+	ROS_INFO("RIP");
 	return 0;
 }

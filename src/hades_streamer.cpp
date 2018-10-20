@@ -16,8 +16,11 @@
 /* Global Declarations */
 /***********************/
 
-int totalSize;
+int totalSize, fCount = 1;
 uint8_t bytePos, EZRCount, byteModulo, granpos[8], packnum[8];
+
+ros::Time start, fin;
+double dur, durSum;
 
 std::queue<uint8_t> dataStream;  //data field FIFO
 std::queue<hades_comm_handler::EZR_Pkt> pktQueue; //packet FIFO
@@ -44,7 +47,8 @@ void Uint64toUint8Arr (uint8_t* buf, uint64_t var, uint32_t lowest_pos){
 /************************/
 
 void theoraCb(const theora_image_transport::Packet &frame){
-	ROS_DEBUG("frame received");
+	start = ros::Time::now(); //time frame received
+	//ROS_DEBUG("frame received");
 
 	/*Prepare packet parameters*/
 		totalSize = frame.data.size() + 19;                //variable data field + 8B granulepos + 8B theoraFrameCount + 1B EZRCount + 1B byteModulo + 1B MsgType
@@ -56,19 +60,19 @@ void theoraCb(const theora_image_transport::Packet &frame){
 	/*Read data field into FIFO*/
 		for(int i = 0;i < frame.data.size();i++)
 			dataStream.push(frame.data[i]);
-		ROS_DEBUG("datastream populated");
+		//ROS_DEBUG("datastream populated");
 	/***************************/
 
 	/*Convert int64 to byte arrays*/
 		Uint64toUint8Arr(granpos, frame.granulepos, 0);    //assuming little endianness
 		Uint64toUint8Arr(packnum, frame.packetno, 0);      //assuming little endianness
-		ROS_DEBUG("gpos & pnum instantiated");
+		//ROS_DEBUG("gpos & pnum instantiated");
 	/******************************/
 
 	/*Construct first packet*/
 		pkt.data[0] = 1;         //message type 1 for video
-		pkt.data[1] = EZRCount;  //number of EZR packets needed to send this message
-		pkt.data[2] = byteModulo;//number of data bytes in last packet
+		pkt.data[1] = (uint8_t)totalSize;  //number of EZR packets needed to send this message
+		pkt.data[2] = (uint8_t)(totalSize >> 8);//number of data bytes in last packet
 
 		bytePos = 3;
 		while(bytePos<=10){ //next 4 bytes are theora.packetno field (int64 casts to uint8[4])
@@ -92,7 +96,7 @@ void theoraCb(const theora_image_transport::Packet &frame){
 		}
 		
 		pktQueue.push(pkt); //publish first packet
-		ROS_DEBUG("packet 1");
+		//ROS_DEBUG("packet 1");
 	/************************/
 
 	/*construct data packets*/
@@ -111,9 +115,16 @@ void theoraCb(const theora_image_transport::Packet &frame){
 			}
 
 			pktQueue.push(pkt); //publish data packet
-			ROS_DEBUG("packet %d",pktNo);
+			//ROS_DEBUG("packet %d",pktNo);
 		} 
 	/************************/
+
+	fin = ros::Time::now();
+	dur = (fin - start).toSec();
+
+	ROS_INFO("%d, %f",fCount,dur);
+	fCount++;
+
 }
 
 /*Ensure packets come out evenly spaced*/
@@ -121,7 +132,7 @@ void timerCb(const ros::TimerEvent&){
 	if(!pktQueue.empty()){
 		pub.publish(pktQueue.front());
 		pktQueue.pop();
-		ROS_INFO("packet sent");
+		//ROS_INFO("packet sent");
 	}
 }
 
@@ -138,9 +149,10 @@ int main(int argc, char **argv){
 	pub = nh.advertise<hades_comm_handler::EZR_Pkt>("serialOut", 512);
 
 	//declare timer to ensure packets spaced out
-	ros::Timer pktTimer = nh.createTimer(ros::Duration(0.0025), timerCb);
+	ros::Timer pktTimer = nh.createTimer(ros::Duration(0.002), timerCb);
 
 	ROS_DEBUG("initialised");
+	
 
 	ros::spin();
 	return 0;

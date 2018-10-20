@@ -56,6 +56,10 @@ add_executable(base_receiver
     src/base_receiver.cpp
 )
 
+add_executable(time_tester
+    src/time_tester.cpp
+)
+
 ## Add cmake target dependencies of the executables
 add_dependencies(hades_streamer
     ${${PROJECT_NAME}_EXPORTED_TARGETS}
@@ -75,6 +79,10 @@ target_link_libraries(hades_streamer
 )
 
 target_link_libraries(base_receiver
+   ${catkin_LIBRARIES}
+)
+
+target_link_libraries(time_tester
    ${catkin_LIBRARIES}
 )
 
