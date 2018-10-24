@@ -138,7 +138,7 @@ int main(int argc, char **argv){
 	//op.has_header = false;	//stops pub.publish() from overwriting header.seq
 	pub = re.advertise<theora_image_transport::Packet>("videoFeed/theora/", 150);
 
-	ros::Subscriber subVid = re.subscribe("serialOut", 10000, serialCb);	
+	ros::Subscriber subVid = re.subscribe("serialTest", 10000, serialCb);	
 
 	ROS_DEBUG("initialised");
 
