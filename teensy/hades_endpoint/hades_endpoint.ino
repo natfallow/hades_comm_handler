@@ -113,8 +113,6 @@ void setup()
 
   SPICounter = 0;
 
-  Serial.begin(2000000);
-
   pinMode(slaveSelectPin, OUTPUT);
   digitalWrite(slaveSelectPin, HIGH);
 
@@ -143,37 +141,19 @@ void loop()
   if (!txBuf.isEmpty()) {
     SPISend();
     //delayMicroseconds(1900);
-    delayMicroseconds(300);
+    //delayMicroseconds(300);
   }
 
   if (SPICounter == 63) {
-    int sum = 0;
     packetCount++;
-   // memcpy(rcvd_pkt.data, rByte, 63);
-     for(int i = 0; i <63; i++){
-      //Serial.println(rByte[i]);
-      //sum += rByte[i];
-        if(rByte[i] != i){
-          byteError += 1;
-          //Serial.println(byteError);
-        }
-      }
-      //if(sum != 1953){
-       // byteError += 1;
-        //Serial.println(byteError);
-      //}
-      
-      Serial.println(packetCount);
-      //Serial.println(byteError);
-      if(packetCount == 20000){
-        Serial.println(byteError);
-      }
-   // rcvd.publish(&rcvd_pkt);
-    //Timer1.restart();
+    memcpy(rcvd_pkt.data, rByte, 63);
+    
+
+    rcvd.publish(&rcvd_pkt);
     
     SPICounter = 0;
   }
-  //nh.spinOnce();
+  nh.spinOnce();
 }
 
 //
