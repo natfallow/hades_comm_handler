@@ -149,7 +149,7 @@ int main(int argc, char **argv){
 	pub = nh.advertise<hades_comm_handler::EZR_Pkt>("serialOut", 512);
 
 	//declare timer to ensure packets spaced out
-	ros::Timer pktTimer = nh.createTimer(ros::Duration(0.002), timerCb);
+	ros::Timer pktTimer = nh.createTimer(ros::Duration(0.003), timerCb);
 
 	ROS_DEBUG("initialised");
 	
