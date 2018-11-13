@@ -13,14 +13,19 @@ the teensy code handles SPI connection to the Si1060, and publishes received rad
 on the receiving end:
 
 1.`roscore`
+
 2. `rosrun rosserial_python _port:=/dev/ttyACM0 _baud:=2000000` **check port is correct**.
+
 3. `rosrun hades_comm_handler base_receiver`
+
 4. `rosrun image_view image_view _image:=videoFeed/ transport:=theora`
 
 on the streaming end:
 
 1. `roscore`
+
 2. `rosrun rosserial_python _port:=/dev/ttyACM0 _baud:=2000000` **check port is correct**.
+
 3. `rosrun hades_comm_handler hades_streamer`
 
 **check everything set up and ready - this step must be done last or theora stream will break**
