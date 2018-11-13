@@ -12,7 +12,7 @@ the teensy code handles SPI connection to the Si1060, and publishes received rad
 
 on the receiving end:
 
-1.`roscore`
+1. `roscore`
 
 2. `rosrun rosserial_python _port:=/dev/ttyACM0 _baud:=2000000` **check port is correct**.
 
